@@ -5,13 +5,16 @@
 
 
 
+
+# In[1]:
+
+
+
 # <nbformat>3.0</nbformat>
 
 # <markdowncell>
 # <codecell>
 
-
-# In[1]:
 
 import pandas as pd
 import numpy as np
@@ -264,12 +267,12 @@ def degree_of_contact_SNP_gene(eQTL_df, contacting_df, frag_by_frag, PIR_window=
 ######   Annotate the SNP-gene pairs
 
 
-def eQTL_in_fragments_one_cell(eQTL, pairs, cell, SNP_window, promoter_window):
+def eQTL_in_fragments_one_cell(eQTL, pairs):
 
     print 'Compute whether the eQTL pair fall in any promoter-PIR pair'
     
-    contacting_cell = pairs[list(pairs.columns[:11])+[cell]]  
-    contacting_cell = contacting_cell[contacting_cell[cell] > 0]   
+    contacting_cell = pairs[list(pairs.columns[:11])+[celltype]]  
+    contacting_cell = contacting_cell[contacting_cell[celltype] > 0]   
 
     result_df = pd.DataFrame()
     for name, df in eQTL.groupby('SNP_CHR'):
@@ -277,8 +280,8 @@ def eQTL_in_fragments_one_cell(eQTL, pairs, cell, SNP_window, promoter_window):
         eQTL_pergene = df.loc[df.groupby('GENE')['P-VALUE'].idxmin()]    ## One Lead SNP per gene
         
         ## approach 1: use KDTree: not right
-        # functional_contacting_idx1 = eQTL_in_fragments_one_chr(eQTL_pergene, contacting_pairs, SNP_window, promoter_window)
-        # functional_contacting_idx2 = eQTL_in_fragments_one_chr(eQTL_pergene, contacting_pairs, SNP_window, promoter_window,
+        # functional_contacting_idx1 = eQTL_in_fragments_one_chr(eQTL_pergene, contacting_pairs, SNP_window_for_PHiC, promoter_window_for_PHiC)
+        # functional_contacting_idx2 = eQTL_in_fragments_one_chr(eQTL_pergene, contacting_pairs, SNP_window_for_PHiC, promoter_window_for_PHiC,
         #                                                        fragments = ['oeStart', 'oeEnd','baitStart', 'baitEnd'])
         # contact_vector = np.array([0] * len(eQTL_pergene))
         # contact_vector[np.array(list(set(functional_contacting_idx1+functional_contacting_idx2)))] = 1
@@ -289,7 +292,7 @@ def eQTL_in_fragments_one_cell(eQTL, pairs, cell, SNP_window, promoter_window):
         # eQTL_pergene['contacting'] = contact_vector
 
         ## approach 3: compute the degree of contacts
-        frag2 = compute_frag_by_frag(contacting_pairs,cell) 
+        frag2 = compute_frag_by_frag(contacting_pairs,celltype) 
         degree_contact = degree_of_contact_SNP_gene(eQTL_pergene, contacting_pairs, frag2)
 
         contact_vector = np.zeros(len(eQTL_pergene))
@@ -297,8 +300,6 @@ def eQTL_in_fragments_one_cell(eQTL, pairs, cell, SNP_window, promoter_window):
         contact_vector[np.where(map(lambda x: 1 in x, degree_contact))[0]] = 1
 
         eQTL_pergene['contacting'] = contact_vector
-
-        save_bed_files(eQTL_pergene, 'Mon', SNP_window_for_motif, promoter_window_for_motif, negative_set_flag)
         
         result_df = result_df.append(eQTL_pergene)
 
@@ -312,7 +313,7 @@ def eQTL_in_fragments_one_cell(eQTL, pairs, cell, SNP_window, promoter_window):
 
 ######   Save the bed files for intersection with TFB motif
 
-def save_bed_files(result_df, celltype, SNP_window, promoter_window, negative_set = False):
+def save_bed_files(result_df, SNP_window, promoter_window, negative_set = False):
 
     if negative_set:
         result_df.to_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)), sep='\t',index=False)
@@ -326,10 +327,10 @@ def save_bed_files(result_df, celltype, SNP_window, promoter_window, negative_se
     SNP_bed.append(list(result_df['SNP']))
     SNP_bed = pd.DataFrame(SNP_bed).transpose()
     if negative_set:
-        SNP_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_eSNP_negativeset.bed'% ("Mon", chr)),
+        SNP_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_eSNP_negativeset.bed'% (celltype, chr)),
                    sep='\t',index=False, header=False)
     else:
-        SNP_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_eSNP.bed' % ("Mon", chr)),
+        SNP_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_eSNP.bed' % (celltype, chr)),
                    sep='\t',index=False, header=False)
     
     ## 
@@ -340,10 +341,10 @@ def save_bed_files(result_df, celltype, SNP_window, promoter_window, negative_se
     promoter_bed.append(list(result_df['GENE']))
     promoter_bed = pd.DataFrame(promoter_bed).transpose()
     if negative_set:
-        promoter_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_egene_negativeset.bed'% ("Mon", chr)),
+        promoter_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_egene_negativeset.bed'% (celltype, chr)),
                    sep='\t',index=False, header=False)
     else:
-        promoter_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_egene.bed'% ("Mon", chr)),
+        promoter_bed.to_csv(os.path.join(DATA_DIR, 'intermediate/%s/PCHiC_peak_matrix_cutoff5_%i_egene.bed'% (celltype, chr)),
                    sep='\t',index=False, header=False)
         
         
@@ -378,8 +379,8 @@ def readin_intermediate_result(celltype, SNP_window, promoter_window, negative_s
 ###############################################################################
 
 #### run the following codes in DATA_DIR
-#### bash TFBS.sh Mon eSNP
-#### bash TFBS.sh Mon gene
+#### bash TFBS.sh ${celltype} eSNP
+#### bash TFBS.sh ${celltype} gene
 
 
 
@@ -390,7 +391,7 @@ def readin_intermediate_result(celltype, SNP_window, promoter_window, negative_s
 ###############################################################################
 
 
-def merge_TF_motif(result_df, celltype, negative_set=False):
+def merge_TF_motif(result_df, negative_set=False):
     if negative_set:
         f1 = 'fimo.output.%s.eSNP.%i.negativeset.bed' % (celltype,int(chr))
         f2 = 'fimo.output.%s.egene.%i.negativeset.bed' % (celltype,int(chr))
@@ -414,6 +415,9 @@ def merge_TF_motif(result_df, celltype, negative_set=False):
     return result_df
 
 
+# In[32]:
+
+
 
 
 
@@ -424,15 +428,22 @@ def merge_TF_motif(result_df, celltype, negative_set=False):
 ###############################################################################
 
 
-def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, window = 1000):
+def readin_ATACseq(filename):
+    ATACseq = pd.read_csv(filename,sep='\t', header=None)
+    ATACseq = ATACseq[[0,1,2,9]]
+    ATACseq.columns = ['chr','Start','End','count']
+    ATACseq = ATACseq[ATACseq['chr'] == 'chr%i'%chr].reset_index(drop=True)
+    return ATACseq
+
+def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, ATAC_window = 1000):
 
     N = len(ATAC_regions)
     eQTL_tree = spatial.KDTree(eQTL_pos)
 
     frag_start = np.reshape(ATAC_regions['Start'],[N,1])
-    eQTL_near_fragStart = eQTL_tree.query_ball_point(frag_start, window)
+    eQTL_near_fragStart = eQTL_tree.query_ball_point(frag_start, ATAC_window)
     frag_end = np.reshape(ATAC_regions['End'],[N,1])
-    eQTL_near_fragEnd = eQTL_tree.query_ball_point(frag_end, window)
+    eQTL_near_fragEnd = eQTL_tree.query_ball_point(frag_end, ATAC_window)
 
     eQTL_near_frag = [list(set(eQTL_near_fragStart[i] + eQTL_near_fragEnd[i])) for i in xrange(N)]
     eQTLID = [x for x in eQTL_near_frag if len(x) > 0]
@@ -445,32 +456,29 @@ def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, window = 1000):
 
 # In[119]:
 
-def eQTL_in_ATACseq_one_cell(eQTL, ATAC, window_SNP = 1000, window_gene = 2000000):
+def eQTL_in_ATACseq_one_cell(eQTL, ATAC, SNP_ATAC_window = 1000, gene_ATAC_window = 2000):
     
-    result_df = pd.DataFrame()
-    for name, g in eQTL.groupby('SNP_CHR'):
-        ## eSNP
-        eSNP_pos = np.reshape(g['SNP_POS'],[len(g),1])
-        ATAC_SNP_vector = eQTL_in_ATACseq_one_chr(eSNP_pos,ATAC[ATAC['Chr'] == name], window = window_SNP)
-        ## egene
-        egene_pos = np.reshape(g['GENE_START_POS'],[len(g),1])
-        ATAC_gene_vector = eQTL_in_ATACseq_one_chr(egene_pos,ATAC[ATAC['Chr'] == name], window = window_gene)
+    if "ATAC_SNP" in eQTL.columns:
+        result_df = eQTL
+    else:
+        result_df = pd.DataFrame()
+        for name, g in eQTL.groupby('SNP_CHR'):
+            ## eSNP
+            eSNP_pos = np.reshape(g['SNP_POS'],[len(g),1])
+            ATAC_SNP_vector = eQTL_in_ATACseq_one_chr(eSNP_pos,ATAC, SNP_ATAC_window)
+            ## egene
+            egene_pos = np.reshape(g['GENE_START_POS'],[len(g),1])
+            ATAC_gene_vector = eQTL_in_ATACseq_one_chr(egene_pos,ATAC, gene_ATAC_window)
         
-        ## ATAC profile
-        ATAC_eQTL = pd.DataFrame({'ATAC_SNP':ATAC_SNP_vector,'ATAC_gene':ATAC_gene_vector})
-        g = pd.concat((g.reset_index(drop=True),ATAC_eQTL),axis=1)
-        result_df = result_df.append(g)        
-        
+            ## ATAC profile
+            ATAC_eQTL = pd.DataFrame({'ATAC_SNP':ATAC_SNP_vector,'ATAC_gene':ATAC_gene_vector})
+            g = pd.concat((g.reset_index(drop=True),ATAC_eQTL),axis=1)
+            result_df = result_df.append(g)        
+    
     return result_df
 
 
-
-# In[120]:
-
-#### ATAC-seq
-
-# ATACseq = pd.read_csv(os.path.join(DATA_DIR, 'ATACseq/GSE74912_ATACseq_All_Counts.txt'),sep='\t')
-
+# In[36]:
 
 
 
@@ -481,71 +489,27 @@ def eQTL_in_ATACseq_one_cell(eQTL, ATAC, window_SNP = 1000, window_gene = 200000
 ###############################################################################
 
 
+
+######   Global parameters
+
 DATA_DIR = '/Users/Yuan/Documents/BLab/Predict_target_genes/data'
 # DATA_DIR = '/scratch1/battle-fs1/heyuan/Predict_target_gene'
 
-compute_negative_set = str_to_bool(os.environ['compute_negative_set'])
-match_distance = int(os.environ['match_distance'])
+chr = int(os.environ['chr'])    ### do it chromosome by chromosome, because of the huge contact matrix
+celltype = "Mon"
 
-from_beginning = str_to_bool(os.environ['from_beginning'])
-negative_set_flag = str_to_bool(os.environ['negative_set_flag'])
-
-SNP_window_for_PHiC = int(os.environ['SNP_window_for_PHiC'])
-promoter_window_for_PHiC = int(os.environ['promoter_window_for_PHiC'])
+DNase_fn = os.path.join(DATA_DIR, 'ATACseq/ENCODE/Mon/CD14_monocytesDukeDNaseSeq.pk')
+DNase_data = readin_ATACseq(DNase_fn)
 
 
-chr = int(os.environ['chr'])
-
-SNP_window_for_motif = 1000
-promoter_window_for_motif = 2000
-
-if compute_negative_set:
-    ### read in all genes infomation
-    GRCh37_genes = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/GRCh37_genes.txt'),sep='\t')
-    gene_idx = []
-    for name, df in GRCh37_genes.groupby(['Associated Gene Name']):
-        gene_idx.append(np.random.choice(list(df.index)))
-    GRCh37_genes = GRCh37_genes.iloc[np.array(gene_idx)]
-    GRCh37_genes.index = GRCh37_genes['Associated Gene Name']
-    
-    ### compute negative sets match for chr and distance
-    mon_eQTL = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/monocytes_cis_fdr05_50kb.csv'),sep='\t')
-    mon_eQTL = mon_eQTL[mon_eQTL['SNP_CHR'] == chr]
-    mon_eQTL_neg = negative_eQTL_onecell(mon_eQTL, match_distance)
-    mon_eQTL_neg.to_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/monocytes_cis_%i_fdr05_50kb_negative.csv' % chr),sep='\t',index=False)
-
-    
-if from_beginning:
-    ### First use all contacting pairs (could transfer to contacting E_P pairs later)
-    pairs = pd.read_csv(os.path.join(DATA_DIR,'CPHiC/Interactions/PCHiC_peak_matrix_cutoff5.txt'),sep='\t', low_memory=False)
-    pairs = pairs[pairs['baitChr'] == pairs['oeChr']]
-    
-    ### read in the (negative) eQTL list
-    if negative_set_flag:
-        mon_eQTL = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/monocytes_cis_%i_fdr05_50kb_negative.csv' % chr),sep='\t')
-    else:
-        mon_eQTL = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/monocytes_cis_fdr05_50kb.csv'),sep='\t')
-    mon_eQTL = mon_eQTL[mon_eQTL['SNP_CHR'] == chr]
-
-    ### compute the overlap of baits/oe with the eQTL list
-    print "Mon"
-    Mon_result = eQTL_in_fragments_one_cell(mon_eQTL, pairs, 'Mon',SNP_window_for_PHiC, promoter_window_for_PHiC)
-    temp = map(lambda x:len(x)-2,list(Mon_result['SNP_contacting_df_idx']))
-    print 'There are %i SNPs among %i that fall in a fragment (2000 window)' % (sum(np.array(temp) >0),len(temp))
-    save_bed_files(Mon_result, 'Mon', SNP_window_for_motif, promoter_window_for_motif, negative_set_flag)
-    
-else:
-    ### read directly from the intermediate results
-    ### and add on the TF motif information
-    if negative_set_flag:
-        filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % ('Mon',chr)
-    else:
-        filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % ('Mon',chr)
-    Mon_result = pd.read_csv(os.path.join(DATA_DIR, filename), sep='\t')
-    Mon_result = merge_TF_motif(Mon_result, 'Mon', negative_set_flag)
-    Mon_result.to_csv(os.path.join(DATA_DIR, filename), sep='\t',index=False)
+filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % (celltype,chr)    
+data = pd.read_csv(os.path.join(DATA_DIR, filename), sep='\t')
+result_df = eQTL_in_ATACseq_one_cell(data, DNase_data, SNP_ATAC_window = 1000, gene_ATAC_window = 2000)
+result_df.to_csv(filename, sep='\t', index=False)
 
 
-
-
+filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)
+data = pd.read_csv(os.path.join(DATA_DIR, filename), sep='\t')
+result_df = eQTL_in_ATACseq_one_cell(data, DNase_data, SNP_ATAC_window = 1000, gene_ATAC_window = 2000)
+result_df.to_csv(filename, sep='\t', index=False)
 

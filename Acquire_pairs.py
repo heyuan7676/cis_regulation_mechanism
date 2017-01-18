@@ -310,11 +310,6 @@ def eQTL_in_fragments_one_cell(eQTL, pairs):
 
 def save_bed_files(result_df, SNP_window, promoter_window, negative_set = False):
 
-    if negative_set:
-        result_df.to_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)), sep='\t',index=False)
-    else:
-        result_df.to_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % (celltype,chr)), sep='\t',index=False)        
-
     SNP_bed = []
     SNP_bed.append(['chr%i'% x for x in (result_df['SNP_CHR'])])
     SNP_bed.append(list(np.array(result_df['SNP_POS']) - SNP_window))
@@ -413,6 +408,8 @@ def merge_TF_motif(result_df, negative_set=False):
 
 
 
+
+
 ###############################################################################
 ###
 ###   Retrive information from ATAC-seq data
@@ -420,15 +417,22 @@ def merge_TF_motif(result_df, negative_set=False):
 ###############################################################################
 
 
-def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, window = 1000):
+def readin_ATACseq(filename):
+    ATACseq = pd.read_csv(filename,sep='\t', header=None)
+    ATACseq = ATACseq[[0,1,2,9]]
+    ATACseq.columns = ['chr','Start','End','count']
+    ATACseq = ATACseq[ATACseq['chr'] == 'chr%i'%chr].reset_index(drop=True)
+    return ATACseq
+
+def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, ATAC_window = 1000):
 
     N = len(ATAC_regions)
     eQTL_tree = spatial.KDTree(eQTL_pos)
 
     frag_start = np.reshape(ATAC_regions['Start'],[N,1])
-    eQTL_near_fragStart = eQTL_tree.query_ball_point(frag_start, window)
+    eQTL_near_fragStart = eQTL_tree.query_ball_point(frag_start, ATAC_window)
     frag_end = np.reshape(ATAC_regions['End'],[N,1])
-    eQTL_near_fragEnd = eQTL_tree.query_ball_point(frag_end, window)
+    eQTL_near_fragEnd = eQTL_tree.query_ball_point(frag_end, ATAC_window)
 
     eQTL_near_frag = [list(set(eQTL_near_fragStart[i] + eQTL_near_fragEnd[i])) for i in xrange(N)]
     eQTLID = [x for x in eQTL_near_frag if len(x) > 0]
@@ -439,34 +443,27 @@ def eQTL_in_ATACseq_one_chr(eQTL_pos, ATAC_regions, window = 1000):
     return x
 
 
-# In[119]:
 
-def eQTL_in_ATACseq_one_cell(eQTL, ATAC, window_SNP = 1000, window_gene = 2000000):
+def eQTL_in_ATACseq_one_cell(eQTL, ATAC, SNP_window = 1000, gene_window = 2000):
     
-    result_df = pd.DataFrame()
-    for name, g in eQTL.groupby('SNP_CHR'):
-        ## eSNP
-        eSNP_pos = np.reshape(g['SNP_POS'],[len(g),1])
-        ATAC_SNP_vector = eQTL_in_ATACseq_one_chr(eSNP_pos,ATAC[ATAC['Chr'] == name], window = window_SNP)
-        ## egene
-        egene_pos = np.reshape(g['GENE_START_POS'],[len(g),1])
-        ATAC_gene_vector = eQTL_in_ATACseq_one_chr(egene_pos,ATAC[ATAC['Chr'] == name], window = window_gene)
+    if "ATAC_SNP" in eQTL.columns:
+        result_df = eQTL
+    else:
+        result_df = pd.DataFrame()
+        for name, g in eQTL.groupby('SNP_CHR'):
+            ## eSNP
+            eSNP_pos = np.reshape(g['SNP_POS'],[len(g),1])
+            ATAC_SNP_vector = eQTL_in_ATACseq_one_chr(eSNP_pos,ATAC, SNP_window)
+            ## egene
+            egene_pos = np.reshape(g['GENE_START_POS'],[len(g),1])
+            ATAC_gene_vector = eQTL_in_ATACseq_one_chr(egene_pos,ATAC, gene_window)
         
-        ## ATAC profile
-        ATAC_eQTL = pd.DataFrame({'ATAC_SNP':ATAC_SNP_vector,'ATAC_gene':ATAC_gene_vector})
-        g = pd.concat((g.reset_index(drop=True),ATAC_eQTL),axis=1)
-        result_df = result_df.append(g)        
-        
+            ## ATAC profile
+            ATAC_eQTL = pd.DataFrame({'ATAC_SNP':ATAC_SNP_vector,'ATAC_gene':ATAC_gene_vector})
+            g = pd.concat((g.reset_index(drop=True),ATAC_eQTL),axis=1)
+            result_df = result_df.append(g)        
+    
     return result_df
-
-
-
-# In[120]:
-
-#### ATAC-seq
-
-# ATACseq = pd.read_csv(os.path.join(DATA_DIR, 'ATACseq/GSE74912_ATACseq_All_Counts.txt'),sep='\t')
-
 
 
 
@@ -483,23 +480,21 @@ def eQTL_in_ATACseq_one_cell(eQTL, ATAC, window_SNP = 1000, window_gene = 200000
 DATA_DIR = '/Users/Yuan/Documents/BLab/Predict_target_genes/data'
 # DATA_DIR = '/scratch1/battle-fs1/heyuan/Predict_target_gene'
 
+chr = int(os.environ['chr'])    ### do it chromosome by chromosome, because of the huge contact matrix
 celltype = os.environ(['celltype'])
 
 compute_negative_set = str_to_bool(os.environ['compute_negative_set'])
 match_distance = int(os.environ['match_distance'])
 
-negative_set_flag = str_to_bool(os.environ['negative_set_flag'])
-
 compute_contacting_degree = str_to_bool(os.environ['compute_contacting_degree'])
 merge_TF_motifs = str_to_bool(os.enrivion['merge_TF_motifs'])
+merge_ATAC_data=str_to_bool(os.enrivion['merge_ATAC_data'])
 
 SNP_window_for_motif = int(os.environ['SNP_window_for_motif'])           ### 1kb
 promoter_window_for_motif = int(os.environ['promoter_window_for_motif']) ### 2kb
 
-chr = int(os.environ['chr'])    ### do it chromosome by chromosome, because of the huge contact matrix
-
-
-
+SNP_ATAC_window = int(os.environ['SNP_ATAC_window'])           ### 1kb
+gene_ATAC_window = int(os.environ['gene_ATAC_window'])           ### 2kb
 
 ######   compute negative sets
 
@@ -522,35 +517,72 @@ if compute_negative_set:
 
 
 ######   annotate the pairs
+
+### CP-HiC
+
+def compute_contacting_degree_function(filename, pairs, negative_set_flag):
+    eQTL_list = pd.read_csv(filename,sep='\t')
+    eQTL_list = eQTL_list[eQTL_list['SNP_CHR'] == chr]
+    ## compute the overlap of baits/oe with the eQTL list
+    result_pchic = eQTL_in_fragments_one_cell(eQTL_list, pairs)
+    ## save results
+    result_pchic.to_csv(filename, sep='\t',index=False)
+    save_bed_files(result_pchic, SNP_window_for_motif, promoter_window_for_motif, negative_set_flag)
+    ## print statistic
+    temp = map(lambda x:len(x)-2,list(result_pchic['SNP_contacting_df_idx']))
+    print 'There are %i SNPs among %i that fall in a fragment (2000 window)' % (sum(np.array(temp) >0),len(temp))
+
     
 if compute_contacting_degree:
     ### First use all contacting pairs (could transfer to contacting E_P pairs later)
     pairs = pd.read_csv(os.path.join(DATA_DIR,'CPHiC/Interactions/PCHiC_peak_matrix_cutoff5.txt'),sep='\t', low_memory=False)
     pairs = pairs[pairs['baitChr'] == pairs['oeChr']]
-    ### read in the (negative) eQTL list
-    if negative_set_flag:
-        eQTL_list = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative.csv' % (celltype, chr)),sep='\t')
-    else:
-        eQTL_list = pd.read_csv(os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_fdr05_50kb.csv' % celltype),sep='\t')
-    eQTL_list = eQTL_list[eQTL_list['SNP_CHR'] == chr]
-    ### compute the overlap of baits/oe with the eQTL list
-    result_pchic = eQTL_in_fragments_one_cell(eQTL_list, pairs)
-    save_bed_files(result_pchic, SNP_window_for_motif, promoter_window_for_motif, negative_set_flag)
-    temp = map(lambda x:len(x)-2,list(result_pchic['SNP_contacting_df_idx']))
-    print 'There are %i SNPs among %i that fall in a fragment (2000 window)' % (sum(np.array(temp) >0),len(temp))
-    
-elif merge_TF_motifs:
-    ### read directly from the intermediate results
-    ### and add on the TF motif information
-    if negative_set_flag:
-        filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)
-    else:
-        filename = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % (celltype,chr)
+    fn_true_eQTL = os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb.csv' % (celltype, chr))
+    fn_random_pairs = os.path.join(DATA_DIR, 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative.csv' % (celltype, chr))
+    compute_contacting_degree_function(fn_true_eQTL, pairs, negative_set_flag=False)
+    compute_contacting_degree_function(fn_random_pairs, pairs, negative_set_flag=True)
+
+
+
+### TF motifs sites
+
+def merge_TF_motifs_function(filename, negative_set_flag):
     result_pchic = pd.read_csv(os.path.join(DATA_DIR, filename), sep='\t')
     result_pchic_tfms = merge_TF_motif(result_pchic, negative_set_flag)
     result_pchic_tfms.to_csv(os.path.join(DATA_DIR, filename), sep='\t',index=False)
 
+    
+if merge_TF_motifs:
+    ### read directly from the intermediate results
+    ### and add on the TF motif information
+    fn_true_eQTL = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % (celltype,chr)
+    fn_random_pairs = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)
+    merge_TF_motifs_function(fn_true_eQTL, False)
+    merge_TF_motifs_function(fn_random_pairs, True)
+
+
+
+### DNase / ATAC data
+
+def merge_ATAC_data_function(DNase_data):
+    result_pchic_tfms = pd.read_csv(os.path.join(DATA_DIR, filename), sep='\t')
+    result_pchic_tfms_atac = eQTL_in_ATACseq_one_cell(data, DNase_data, SNP_ATAC_window, gene_ATAC_window)
+    result_pchic_tfms_atac.to_csv(filename, sep='\t', index=False)
+
+
+
+if merge_ATAC_data:
+    DNase_fn = os.path.join(DATA_DIR, 'ATACseq/ENCODE/Mon/CD14_monocytesDukeDNaseSeq.pk')
+    DNase_data = readin_ATACseq(DNase_fn)
+
+    fn_true_eQTL = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_annotated.csv' % (celltype,chr)
+    fn_random_pairs = 'eQTL/FairFax/%s_cis_%i_fdr05_50kb_negative_annotated.csv' % (celltype,chr)
+    merge_ATAC_data_function(fn_true_eQTL)
+    merge_ATAC_data_function(fn_random_pairs)
 
 
 
 
+
+
+    
